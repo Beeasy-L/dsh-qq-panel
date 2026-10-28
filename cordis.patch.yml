@@ -1,0 +1,9 @@
+# dsh-qq-panel 的 bundle 层：把面板挂进 DSH profile。
+#
+# 这里**不要写 config**：plugin 行带 config 但没有对应 Config schema 时，该 entry 可能
+# 激活不了；DSH 前端会把「未激活的 entry」当致命错误直接中止启动（开发这个插件时实测踩过）。
+# 桥接仓库路径由 host 半边解析（环境变量 QQ_BRIDGE_DIR → ~/.dsh/qq-panel.json → 自动探测），
+# 也可以在面板里直接填。
+- insert:
+    - id: qq-panel
+      name: dsh-qq-panel

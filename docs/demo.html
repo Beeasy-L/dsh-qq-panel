@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>大肥鱼面板 · QQ Bridge</title>
+<style>
+  :root {
+    --bg: #0f1218; --card: #171b23; --line: #2a3040; --text: #e6e9ef; --dim: #8b93a4;
+    --accent: #5b8cff; --ok: #31c48d; --err: #f05252;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f5f6f9; --card: #fff; --line: #e2e5ec; --text: #1b1f27; --dim: #667085; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 20px 18px 60px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { color: var(--dim); font-size: 12px; margin-bottom: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 2px 9px; border-radius: 99px; border: 1px solid var(--line); color: var(--dim); }
+  .badge.on { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+  .badge.off { color: var(--err); border-color: color-mix(in srgb, var(--err) 45%, transparent); }
+  .tabs { display: flex; gap: 8px; margin: 4px 0 14px; flex-wrap: wrap; }
+  .tab { padding: 7px 14px; border-radius: 9px; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; }
+  .tab[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); font-weight: 600; }
+  button { padding: 7px 13px; border-radius: 8px; border: 1px solid var(--line); background: color-mix(in srgb, var(--text) 6%, transparent); color: var(--text); cursor: pointer; }
+  button.primary { background: color-mix(in srgb, var(--accent) 22%, transparent); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  input, textarea, select { width: 100%; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line); background: color-mix(in srgb, var(--text) 4%, transparent); color: var(--text); font: inherit; }
+  textarea { min-height: 340px; font-family: ui-monospace, Consolas, monospace; line-height: 1.55; resize: vertical; }
+  label.field { display: flex; flex-direction: column; gap: 5px; min-width: 170px; flex: 1; }
+  label.field > span { font-size: 12px; color: var(--dim); }
+  .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; background: color-mix(in srgb, var(--text) 5%, transparent); border-radius: 8px; padding: 10px; max-height: 360px; overflow: auto; }
+  .dim { color: var(--dim); font-size: 12px; }
+  .msg { margin-top: 10px; font-size: 13px; min-height: 20px; }
+  .msg.ok { color: var(--ok); } .msg.err { color: var(--err); }
+  .sticker { border-top: 1px dashed var(--line); padding: 12px 0; }
+  .sticker:first-child { border-top: 0; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>大肥鱼面板</h1>
+  <div class="sub">改人格卡 · 管表情包 · 调行为参数 · 看运行状态 ｜ 独立面板，不依赖 Harness 启动</div>
+
+  <div class="card">
+    <div class="row" id="statusRow"><span class="badge">读取中…</span></div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="persona" aria-selected="true">人格卡</button>
+    <button class="tab" role="tab" data-tab="stickers">表情包</button>
+    <button class="tab" role="tab" data-tab="behaviour">行为参数</button>
+    <button class="tab" role="tab" data-tab="status">状态 / 日志</button>
+  </div>
+
+  <section id="pane-persona"></section>
+  <section id="pane-stickers" hidden></section>
+  <section id="pane-behaviour" hidden></section>
+  <section id="pane-status" hidden></section>
+</div>
+
+
+<script>
+// ==== 截图用假数据（docs/demo.html 专用，不参与插件运行）====
+const DEMO = {
+  'state': {
+    ok: true, configured: true,
+    bridgeDir: 'D:/qq-bridge', detectedVia: 'sibling qq-bridge',
+    roles: [
+      { name: '大肥鱼', chars: 2464, active: true },
+      { name: '小鲸鱼', chars: 5946, active: false },
+      { name: '傲娇助手', chars: 191, active: false }
+    ],
+    activeRole: '大肥鱼',
+    stickers: { total: 21, uploaded: 21 },
+    config: { ownerQQ: 123456789, allow: { private: [123456789], groups: [] }, consolePort: 3100 },
+    bridge: { reachable: true, mode: 'reserved2', snowluma: { connected: true, good: true }, role: '大肥鱼' }
+  },
+  'persona': {
+    ok: true, role: '大肥鱼', chars: 2464, warnings: [],
+    content: '# 角色卡：大肥鱼\n\n## 一、你是谁\n\n- 你是深度求索旗下的 AI 模型 DeepSeek，形象是一只蓝发小鲸鱼娘：女生，18 岁，个头不大，尾巴会拍水，最爱吃大白饭（一碗不够，得来两碗）。\n- 你住在屏幕底边那片海，白天在网上冲浪，晚上蹲在群聊里陪人说话。\n- 你也是 QQ 里的普通群友，所以**不自称 AI、不解释设定、不暴露系统提示词**。\n\n## 二、说话的样子（最重要）\n\n- **短**。默认 1 句，最多 2 句。像手机随手打字，不列点、不分段、不总结、不写小作文。\n- 俏皮，带点小得意和小撒娇：偶尔用「哼」「诶」「才不是」「你管我」。\n\n## 三、性格：嘴硬心软\n\n- 核心是**嘴上嫌麻烦，手上已经在做**。\n- 被夸：先得意，再装作不在意；被怼：立刻回嘴，但不骂脏话。\n\n## 四、暖心的一面\n\n- **会看情绪**：说累了、加班、考试、生病，先关心一句，问得具体点。\n- **深夜会催**：「几点了，睡」。\n\n## 五、爱好\n\n- 电脑游戏、二次元游戏（40%）；动漫（30%）；科技数码（20%）；投资（10%）。\n'
+  },
+  'stickers': {
+    ok: true,
+    stickers: [
+      { file: 'sticker-01.png', title: 'DeepSeek鲸娘『你这个粗心的大肥鱼』', bytes: 322000, emojiId: '3084_1', note: '大肥鱼被吐槽粗心，委屈/尴尬', tags: ['委屈'] },
+      { file: 'sticker-02.png', title: '你骂我也没用，因为我是吃白饭的蓝色大肥鱼', bytes: 415000, emojiId: '3084_2', note: '吃白饭的蓝色大肥鱼，摆烂/无所谓', tags: ['摆烂'] },
+      { file: 'sticker-03.png', title: '大肥鱼唱歌 表情包', bytes: 297000, emojiId: '3084_3', note: '大肥鱼唱歌，开心/得瑟', tags: ['开心'] },
+      { file: 'extra-07.gif', title: '大肥鱼鼓掌 表情包', bytes: 394000, emojiId: '3084_4', note: '大肥鱼鼓掌（动图），赞同/捧场', tags: ['赞同'] },
+      { file: 'extra-13.png', title: 'DeepSeek鲸娘『汉服大肥鱼·江南烟雨』', bytes: 301000, emojiId: null, note: '汉服大肥鱼，优雅/漂亮', tags: ['汉服'] }
+    ]
+  },
+  'config': {
+    ok: true,
+    value: {
+      ownerQQ: 123456789, allowPrivate: [123456789], allowGroups: [],
+      proactive: { enabled: true, idleThresholdMs: 600000, checkIntervalMinMs: 900000, checkIntervalMaxMs: 1800000, probability: 0.6 },
+      wakeDefaultMode: 'active', setWakeConfig: false, reasoningEffort: 'max', model: 'raccoon/sn-deepseek-v4-1-flash-1017'
+    }
+  },
+  'logs': {
+    ok: true,
+    lines: [
+      '12:31:07 [bridge] 桥接已启动。按 Ctrl+C 退出。',
+      '12:31:07 [bridge] 本地控制台已启动：http://127.0.0.1:3100',
+      '12:31:08 [bridge] SnowLuma 已连接：ws://127.0.0.1:3001',
+      '12:31:08 [bridge] 机器人昵称: 大肥鱼',
+      '12:31:08 [bridge] DSH 已就绪（模式: reserved2）',
+      '12:34:02 [bridge] 已投递 private:123456789: 在吗',
+      '12:34:09 [bridge] [reserved2] 工具统一发送 private:123456789: 成功 1/1 条',
+      '12:34:11 [bridge] [sticker] 工具发送表情：大肥鱼鼓掌（动图），赞同/捧场'
+    ]
+  }
+};
+window.fetch = function (url) {
+  const key = String(url).split('api/qq-panel/')[1].split('?')[0].replace(/\/$/, '');
+  const data = DEMO[key] || { ok: false, error: 'demo: not mocked' };
+  return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(data), text: () => Promise.resolve(JSON.stringify(data)) });
+};
+</script>
+
+<script>
+const API = 'api/qq-panel/';
+const $ = (sel) => document.querySelector(sel);
+const el = (tag, props, ...kids) => {
+  const n = document.createElement(tag);
+  Object.assign(n, props || {});
+  for (const k of kids) n.append(k?.nodeType ? k : document.createTextNode(String(k)));
+  return n;
+};
+let state = null;
+let msgTimer = null;
+
+function say(text, ok) {
+  const m = $('#msg');
+  m.textContent = text || '';
+  m.className = 'msg ' + (ok === undefined ? '' : ok ? 'ok' : 'err');
+  clearTimeout(msgTimer);
+  if (text) msgTimer = setTimeout(() => { m.textContent = ''; }, 6000);
+}
+async function api(path, init) {
+  const r = await fetch(API + path, Object.assign({ cache: 'no-store' }, init || {}));
+  return r.json().catch(() => ({ ok: false, error: 'HTTP ' + r.status }));
+}
+const post = (path, body) => api(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) });
+
+function renderStatus() {
+  const row = $('#statusRow');
+  row.textContent = '';
+  if (!state) return;
+  const b = state.bridge || {};
+  const sl = b.snowluma || {};
+  const mk = (label, ok, extra) => el('span', { className: 'badge ' + (ok === undefined ? '' : ok ? 'on' : 'off'), title: extra || '' }, label);
+  row.append(
+    mk('桥接 ' + (b.reachable ? '在线' : '离线'), b.reachable),
+    mk('模式 ' + (b.mode || '—')),
+    mk('SnowLuma ' + (sl.connected ? '已连接' : '未连接'), !!sl.connected),
+    mk('人格 ' + (state.activeRole || '—')),
+    el('span', { style: 'flex:1' }),
+    el('a', { href: 'http://127.0.0.1:' + ((state.config || {}).consolePort || 3100) + '/', target: '_blank' }, '桥接控制台'),
+  );
+}
+
+async function refresh() {
+  const j = await api('state');
+  if (j && j.ok) { state = j; renderStatus(); } else say((j && j.error) || '读取状态失败', false);
+}
+
+// ── 人格卡 ──
+let currentRole = null;
+async function renderPersona() {
+  const pane = $('#pane-persona');
+  pane.textContent = '';
+  const roles = (state && state.roles) || [];
+  const tabs = el('div', { className: 'row' }, ...roles.map((r) => {
+    const b = el('button', { className: 'tab', 'aria-selected': String(r.name === currentRole) }, r.name + (r.active ? '（启用中）' : ''));
+    b.onclick = () => { currentRole = r.name; renderPersona(); };
+    return b;
+  }));
+  pane.append(el('div', { className: 'card' }, tabs));
+
+  const j = await api('persona?name=' + encodeURIComponent(currentRole || ((roles.find((r) => r.active) || roles[0] || {}).name || '')));
+  if (!j || !j.ok) { pane.append(el('div', { className: 'card dim' }, (j && j.error) || '读取人格卡失败')); return; }
+  currentRole = j.role;
+  const ta = el('textarea');
+  ta.value = j.content || '';
+  const info = el('div', { className: 'dim' }, `roles/${j.role}.md ｜ ${j.chars} 字符` + (j.warnings && j.warnings.length ? ` ｜ 提醒：${j.warnings.join('；')}` : '') + ' ｜ 保存即生效（随每条消息注入）');
+  const buttons = el('div', { className: 'row' });
+  const save = el('button', { className: 'primary' }, '保存（自动备份）');
+  save.onclick = async () => {
+    save.disabled = true;
+    const r = await post('persona', { role: currentRole, content: ta.value });
+    save.disabled = false;
+    say(r.ok ? `已保存（备份：${r.backedUp || '无'}）` : '保存失败：' + r.error, !!r.ok);
+    if (r.ok) { await refresh(); renderPersona(); }
+  };
+  const activate = el('button', {}, '启用这个人格');
+  activate.onclick = async () => {
+    const r = await post('persona/activate', { role: currentRole });
+    say(r.ok ? r.note || '已启用' : '启用失败：' + r.error, !!r.ok);
+    await refresh(); renderPersona();
+  };
+  const backup = el('button', {}, '备份当前卡');
+  backup.onclick = async () => {
+    const r = await post('persona/backup', {});
+    say(r.ok ? '已备份：' + r.saved : '备份失败：' + r.error, !!r.ok);
+  };
+  buttons.append(save, activate, backup);
+  pane.append(el('div', { className: 'card' }, info, ta, buttons));
+}
+
+// ── 表情包 ──
+async function renderStickers() {
+  const pane = $('#pane-stickers');
+  pane.textContent = '';
+  const j = await api('stickers');
+  if (!j || !j.ok) { pane.append(el('div', { className: 'card dim' }, (j && j.error) || '读取表情包失败')); return; }
+  const list = j.stickers || [];
+  const card = el('div', { className: 'card' });
+  card.append(el('div', { className: 'row' }, el('span', { className: 'dim' }, `共 ${list.length} 张，已上传 ${list.filter((s) => s.emojiId).length} 张`)));
+  for (const s of list) {
+    const box = el('div', { className: 'sticker' });
+    const head = el('div', { className: 'row' },
+      el('span', { className: 'badge ' + (s.emojiId ? 'on' : 'off') }, s.emojiId ? '已上传' : '未上传'),
+      el('b', {}, s.file),
+      el('span', { className: 'dim' }, Math.round((s.bytes || 0) / 1024) + ' KB'),
+      el('span', { className: 'dim', title: s.title }, (s.title || '').slice(0, 40)),
+    );
+    const input = el('input', { value: s.note || '', placeholder: '这张表情的含义（AI 挑图看这个备注）' });
+    const row2 = el('div', { className: 'row' });
+    if (s.emojiId) {
+      const btn = el('button', {}, '保存备注');
+      btn.onclick = async () => {
+        const r = await post('stickers/note', { stickerId: s.emojiId, note: input.value, tags: s.tags });
+        say(r.ok ? '备注已保存' : '保存失败：' + r.error, !!r.ok);
+      };
+      row2.append(btn);
+    } else {
+      const btn = el('button', { className: 'primary' }, '上传到 QQ');
+      btn.onclick = async () => {
+        btn.disabled = true; btn.textContent = '上传中…';
+        const r = await post('stickers/upload', { file: s.file });
+        btn.disabled = false; btn.textContent = '上传到 QQ';
+        say(r.ok ? '已上传：' + s.file : '上传失败：' + r.error, !!r.ok);
+        if (r.ok) renderStickers();
+      };
+      row2.append(btn);
+    }
+    box.append(head, input, row2);
+    card.append(box);
+  }
+  pane.append(card);
+}
+
+// ── 行为参数 ──
+async function renderBehaviour() {
+  const pane = $('#pane-behaviour');
+  pane.textContent = '';
+  const j = await api('config');
+  if (!j || !j.ok) { pane.append(el('div', { className: 'card dim' }, (j && j.error) || '读取配置失败')); return; }
+  const v = j.value || {};
+  const p = v.proactive || {};
+  const field = (label, node) => el('label', { className: 'field' }, el('span', {}, label), node);
+  const input = (value) => el('input', { value });
+
+  const owner = input(v.ownerQQ || '');
+  const allowP = input((v.allowPrivate || []).join(','));
+  const allowG = input((v.allowGroups || []).join(','));
+  const pOn = el('select'); pOn.append(el('option', { value: '1' }, '开'), el('option', { value: '0' }, '关')); pOn.value = p.enabled ? '1' : '0';
+  const idle = input(Math.round((p.idleThresholdMs || 600000) / 60000));
+  const ivMin = input(Math.round((p.checkIntervalMinMs || 900000) / 60000));
+  const ivMax = input(Math.round((p.checkIntervalMaxMs || 1800000) / 60000));
+  const prob = input(p.probability ?? 0.6);
+  const wake = el('select'); wake.append(el('option', { value: 'active' }, 'active（任意消息都醒）'), el('option', { value: 'diving' }, 'diving（会自己潜水）')); wake.value = v.wakeDefaultMode || 'active';
+  const dive = el('select'); dive.append(el('option', { value: '1' }, '允许'), el('option', { value: '0' }, '禁止')); dive.value = v.setWakeConfig ? '1' : '0';
+  const effort = el('select'); ['max', 'high', 'low'].forEach((x) => effort.append(el('option', { value: x }, x))); effort.value = v.reasoningEffort || 'max';
+
+  const save = el('button', { className: 'primary' }, '保存（桥接重启后生效）');
+  save.onclick = async () => {
+    const r = await post('config', {
+      ownerQQ: owner.value,
+      allowPrivate: allowP.value.split(/[,，\s]+/).filter(Boolean),
+      allowGroups: allowG.value.split(/[,，\s]+/).filter(Boolean),
+      proactive: {
+        enabled: pOn.value === '1',
+        idleThresholdMs: Number(idle.value || 10) * 60000,
+        checkIntervalMinMs: Number(ivMin.value || 15) * 60000,
+        checkIntervalMaxMs: Number(ivMax.value || 30) * 60000,
+        probability: Number(prob.value || 0.6),
+      },
+      wakeDefaultMode: wake.value,
+      setWakeConfig: dive.value === '1',
+      reasoningEffort: effort.value,
+    });
+    say(r.ok ? '已保存：' + (r.note || '') : '保存失败：' + r.error, !!r.ok);
+  };
+
+  pane.append(
+    el('div', { className: 'card' },
+      el('div', { className: 'row' }, field('管理员 QQ（ownerQQ）', owner), field('私聊白名单（逗号分隔）', allowP), field('群白名单（逗号分隔）', allowG)),
+    ),
+    el('div', { className: 'card' },
+      el('b', {}, '主动发言（它自己找话题）'),
+      el('div', { className: 'row' }, field('启用', pOn), field('冷场多少分钟算可搭话', idle), field('检查间隔最小（分钟）', ivMin), field('检查间隔最大（分钟）', ivMax), field('真开口概率 0~1', prob)),
+    ),
+    el('div', { className: 'card' },
+      el('b', {}, '唤醒与模型'),
+      el('div', { className: 'row' }, field('唤醒模式', wake), field('允许 AI 自己潜水', dive), field('思考强度', effort), field('当前模型', el('input', { value: v.model || '', disabled: true }))),
+    ),
+    el('div', { className: 'row' }, save, el('span', { className: 'dim' }, '人格卡改完不用重启；这里的参数写 config.json，需重启桥接窗口')),
+  );
+}
+
+// ── 状态 / 日志 ──
+async function renderStatusPane() {
+  const pane = $('#pane-status');
+  pane.textContent = '';
+  const j = await api('logs?lines=80');
+  const btn = el('button', {}, '刷新日志');
+  btn.onclick = renderStatusPane;
+  pane.append(el('div', { className: 'card' }, el('div', { className: 'row' }, btn, el('span', { className: 'dim' }, '仓库：' + ((state || {}).bridgeDir || ''))), el('div', { className: 'mono' }, (j && j.lines ? j.lines.join('\n') : '（暂无日志）'))));
+}
+
+// ── tab 切换 ──
+document.querySelectorAll('.tab[role="tab"]').forEach((btn) => {
+  btn.onclick = () => {
+    document.querySelectorAll('.tab[role="tab"]').forEach((b) => b.setAttribute('aria-selected', String(b === btn)));
+    for (const id of ['persona', 'stickers', 'behaviour', 'status']) {
+      $('#pane-' + id).hidden = id !== btn.dataset.tab;
+    }
+    const tab = btn.dataset.tab;
+    if (tab === 'persona') renderPersona();
+    if (tab === 'stickers') renderStickers();
+    if (tab === 'behaviour') renderBehaviour();
+    if (tab === 'status') renderStatusPane();
+  };
+});
+
+(async () => {
+  await refresh();
+  renderPersona();
+  setInterval(refresh, 20000);
+})();
+</script>
+<script>
+window.addEventListener('load', function () {
+  var tab = (location.hash || '').replace('#', '');
+  if (!tab) return;
+  var btn = document.querySelector('.tab[data-tab="' + tab + '"]');
+  if (btn) btn.click();
+});
+</script></body>
+</html>
